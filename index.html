@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>금성의 공전과 위상 변화 - Square_K</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Pretendard', 'Malgun Gothic', sans-serif;
+            touch-action: none; /* 모바일 스크롤 및 당겨서 새로고침 방지 */
+            user-select: none;
+        }
+        /* 우측 상단 logo (회색 글씨, 테두리 없음) */
+        #brand {
+            position: absolute;
+            top: 15px;
+            right: 20px;
+            color: #888888;
+            font-size: 13px;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+            z-index: 10;
+        }
+        /* 동/서 방위 표시 */
+        .cardinal {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 14px;
+            font-weight: bold;
+            padding: 8px 12px;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            pointer-events: none;
+            z-index: 10;
+        }
+        .cardinal.east { left: 20px; }
+        .cardinal.west { right: 20px; }
+        
+        #ui-container {
+            position: absolute;
+            bottom: 25px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            color: white;
+            z-index: 10;
+            width: 90%;
+            max-width: 400px;
+        }
+        button {
+            padding: 12px 35px;
+            font-size: 16px;
+            font-weight: bold;
+            color: white;
+            background-color: #333;
+            border: 2px solid #fff;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        button:active {
+            background-color: #666;
+        }
+        .instruction {
+            margin-bottom: 8px;
+            font-size: 13px;
+            text-shadow: 1px 1px 3px black;
+            color: #bbb;
+        }
+
+        /* 모바일 화면 대응 (미디어 쿼리) */
+        @media (max-width: 600px) {
+            #brand {
+                top: 12px;
+                right: 15px;
+                font-size: 11px;
+            }
+            .cardinal {
+                font-size: 11px;
+                padding: 5px 8px;
+            }
+            .cardinal.east { left: 10px; }
+            .cardinal.west { right: 10px; }
+            
+            #ui-container {
+                bottom: 20px;
+            }
+            button {
+                padding: 10px 28px;
+                font-size: 15px;
+            }
+            .instruction {
+                font-size: 11px;
+            }
+        }
+    </style>
+    <!-- Three.js 라이브러리 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+    <div id="brand">made by Square_K</div>
+    
+    <div class="cardinal east">← 동쪽 (East)</div>
+    <div class="cardinal west">서쪽 (West) →</div>
+
+    <div id="ui-container">
+        <div class="instruction">화면을 드래그하여 시점을 변경해보세요</div>
+        <button id="toggleBtn">정지</button>
+    </div>
+
+    <script>
+        // 1. 씬, 카메라, 렌더러
+        const scene = new THREE.Scene();
+        
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        
+        // 반응형 카메라 거리 설정 함수
+        function updateCameraDistance() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            // 모바일(세로 모드)일 경우 행성들이 짤리지 않도록 카메라를 더 뒤로 이동
+            if (window.innerWidth < 600) {
+                camera.position.set(0, 10, 52);
+            } else {
+                camera.position.set(0, 8, 40);
+            }
+            camera.lookAt(0, 0, 0);
+            camera.updateProjectionMatrix();
+        }
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // 모바일 고해상도 지원
+        document.body.appendChild(renderer.domElement);
+
+        updateCameraDistance();
+
+        // 2. 조명
+        scene.add(new THREE.AmbientLight(0xffffff, 0.05));
+        
+        const sunLight = new THREE.PointLight(0xffffff, 2, 100);
+        sunLight.position.set(0, 0, 0);
+        scene.add(sunLight);
+
+        // 3. 천체 생성
+        // 태양
+        const sunGeo = new THREE.SphereGeometry(3, 32, 32);
+        const sunMat = new THREE.MeshBasicMaterial({ color: 0xffdd00 });
+        const sun = new THREE.Mesh(sunGeo, sunMat);
+        scene.add(sun);
+
+        // 지구
+        const earthGeo = new THREE.SphereGeometry(1.5, 32, 32);
+        const earthMat = new THREE.MeshStandardMaterial({ color: 0x2288ff, roughness: 0.8 });
+        const earth = new THREE.Mesh(earthGeo, earthMat);
+        earth.position.set(0, 0, 25);
+        scene.add(earth);
+
+        // 금성
+        const venusGeo = new THREE.SphereGeometry(1.2, 32, 32);
+        const venusMat = new THREE.MeshStandardMaterial({ color: 0xffaa55, roughness: 0.5 });
+        const venus = new THREE.Mesh(venusGeo, venusMat);
+        scene.add(venus);
+
+        // 궤도선
+        const orbitRadius = 13;
+        const orbitGeo = new THREE.BufferGeometry();
+        const orbitPoints = [];
+        for (let i = 0; i <= 64; i++) {
+            const angle = (i / 64) * Math.PI * 2;
+            orbitPoints.push(new THREE.Vector3(Math.cos(angle) * orbitRadius, 0, Math.sin(angle) * orbitRadius));
+        }
+        orbitGeo.setFromPoints(orbitPoints);
+        const orbitMat = new THREE.LineBasicMaterial({ color: 0x444444 });
+        const orbitLine = new THREE.Line(orbitGeo, orbitMat);
+        scene.add(orbitLine);
+
+        // 4. 애니메이션 상태 및 이벤트
+        let isPlaying = true;
+        let venusAngle = 0;
+        const venusSpeed = 0.01;
+
+        const toggleBtn = document.getElementById('toggleBtn');
+        toggleBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            isPlaying = !isPlaying;
+            toggleBtn.textContent = isPlaying ? "정지" : "재생";
+        });
+
+        // PC 및 모바일 인터랙션 (마우스 & 터치 통합 지원)
+        let isDragging = false;
+        let previousPosition = { x: 0, y: 0 };
+
+        function getPos(e) {
+            if (e.touches && e.touches.length > 0) {
+                return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            }
+            return { x: e.clientX, y: e.clientY };
+        }
+
+        function onStart(e) {
+            isDragging = true;
+            previousPosition = getPos(e);
+        }
+
+        function onEnd() {
+            isDragging = false;
+        }
+
+        function onMove(e) {
+            if (!isDragging) return;
+            
+            const currentPos = getPos(e);
+            const deltaX = currentPos.x - previousPosition.x;
+            const deltaY = currentPos.y - previousPosition.y;
+
+            camera.position.x -= deltaX * 0.05;
+            camera.position.y += deltaY * 0.05;
+            camera.lookAt(0, 0, 0);
+
+            previousPosition = currentPos;
+        }
+
+        // 마우스 이벤트
+        window.addEventListener('mousedown', onStart);
+        window.addEventListener('mouseup', onEnd);
+        window.addEventListener('mousemove', onMove);
+
+        // 터치 이벤트 (모바일)
+        window.addEventListener('touchstart', onStart, { passive: true });
+        window.addEventListener('touchend', onEnd);
+        window.addEventListener('touchmove', onMove, { passive: true });
+
+        // 5. 애니메이션 루프
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (isPlaying) {
+                venusAngle += venusSpeed;
+                venus.position.x = Math.cos(venusAngle) * orbitRadius;
+                venus.position.z = -Math.sin(venusAngle) * orbitRadius;
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // 창 크기 변경 및 회전 감지
+        window.addEventListener('resize', () => {
+            updateCameraDistance();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>
